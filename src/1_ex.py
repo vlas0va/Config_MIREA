@@ -3,6 +3,29 @@ from tkinter import scrolledtext, Entry, END
 import argparse
 import os
 
+def load_vfs(vfs_root):
+    if not os.path.exists(vfs_root):
+        raise FileNotFoundError(f"VFS directory not found: {vfs_root}")
+
+    def build_node(path):
+        node = {'type': 'dir', 'children': {}}
+        try:
+            for name in os.listdir(path):
+                full_path = os.path.join(path, name)
+                if os.path.isdir(full_path):
+                    node['children'][name] = build_node(full_path)
+                else:
+                    
+                    size = os.path.getsize(full_path)
+                    node['children'][name] = {
+                        'type': 'file',
+                        'size': size
+                    }
+        except PermissionError:
+            pass
+        return node
+    return build_node(vfs_root)
+
 class ShellEmulator:
     def __init__(self, root, vfs_path=None, script_path=None):
         self.root = root
@@ -11,6 +34,19 @@ class ShellEmulator:
 
         print(f"VFS Path: {self.vfs_path}")
         print(f"Script Path: {self.script_path}")
+
+        self.vfs = None
+        self.current_dir = "/"
+
+        if vfs_path:
+            try:
+                self.vfs = load_vfs(vfs_path)
+                print(f"[INFO] VFS successfully loaded from {vfs_path}")
+            except Exception as e:
+                self.print_output(f"Error loading VFS: {e}\n")
+                self.root.quit()
+        else:
+            self.print_output("Warning: No VFS provided. Commands like ls will not work.\n")
 
         self.root.title("VFS")
         self.root.geometry("800x600")
@@ -83,16 +119,102 @@ class ShellEmulator:
             self.root.quit()
 
         elif cmd == "ls":
-            self.print_output(f"Command 'ls' called with args: {args}\n")
+            self.cmd_ls(args)
 
         elif cmd == "cd":
-            if len(args) != 1:
-                self.print_output(f"Error: 'cd' requires exactly one argument.\n")
-            else:
-                self.print_output(f"Command 'cd' called with arg: {args[0]}\n")
+            self.cmd_cd(args)
 
         else:
             self.print_output(f"Error: Unknown command '{cmd}'\n")
+
+    def cmd_ls(self, args):
+        if self.vfs is None:
+            self.print_output("Error: VFS not loaded.\n")
+            return
+
+        if len(args) == 0 or args[0].startswith('-'):
+            target_path = self.current_dir
+        else:
+            target_path = args[0]
+
+        abs_path = self.resolve_path(target_path)
+        node = self.get_node_at(abs_path)
+
+        if node is None:
+            self.print_output(f"Error: No such directory: {target_path}\n")
+        elif node['type'] != 'dir':
+            self.print_output(f"Error: Not a directory: {target_path}\n")
+        else:
+            if not node['children']:
+                self.print_output("(empty)\n")
+            else:
+                for name in sorted(node['children']):
+                    child = node['children'][name]
+                    if child['type'] == 'dir':
+                        self.print_output(f"{name}/\n")
+                    else:
+                        self.print_output(f"{name}\n")
+
+    def cmd_cd(self, args):
+        if self.vfs is None:
+            self.print_output("Error: VFS not loaded.\n")
+            return
+
+        if len(args) != 1:
+            self.print_output("Usage: cd <directory>\n")
+            self.show_prompt()
+            return
+
+        new_path = self.resolve_path(args[0])
+        node = self.get_node_at(new_path)
+
+        if node is None:
+            self.print_output(f"Error: No such directory: {args[0]}\n")
+        elif node['type'] != 'dir':
+            self.print_output(f"Error: Not a directory: {args[0]}\n")
+        else:
+            self.current_dir = new_path
+            self.print_output(f"Changed directory to: {self.current_dir}\n")
+
+    
+    def resolve_path(self, path):
+        """
+        Преобразует относительный путь в абсолютный, обрабатывая '.', '..', '/'
+        """
+        if path == "." or path == "":
+            return self.current_dir
+
+        if path.startswith("/"):
+            abs_parts = [p for p in path.split("/") if p]
+        else:
+            current_parts = [p for p in self.current_dir.strip("/").split("/") if p]
+            rel_parts = [p for p in path.split("/") if p]
+            abs_parts = current_parts + rel_parts
+
+        result = []
+        for part in abs_parts:
+            if part == "..":
+                if result:
+                    result.pop()
+            elif part == ".":
+                continue
+            else:
+                result.append(part)
+
+        # Формируем путь
+        return "/" + "/".join(result) if result else "/"
+
+    def get_node_at(self, path):
+        if path == "/":
+            return self.vfs
+
+        parts = [p for p in path.split("/") if p]
+        current = self.vfs
+        for part in parts:
+            if current['type'] != 'dir' or part not in current['children']:
+                return None
+            current = current['children'][part]
+        return current
 
     def on_input(self, event):
         command = self.input_entry.get()
