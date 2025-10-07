@@ -60,7 +60,7 @@ class ShellEmulator:
 
         self.prompt = "$ "
 
-        self.print_output(f"Shell Emulator started.\nType commands like 'ls', 'cd', or 'exit'.\n\n")
+        self.print_output(f"Shell Emulator started.\n\n")
         
         if script_path:
             if os.path.exists(script_path):
@@ -100,7 +100,7 @@ class ShellEmulator:
             if not line or line.startswith("#"):
                 continue
 
-            self.print_output(f"> {line}\n")
+            self.print_output(f"$ {line}\n")
 
             self.execute_command(line)
 
@@ -123,6 +123,15 @@ class ShellEmulator:
 
         elif cmd == "cd":
             self.cmd_cd(args)
+        
+        elif cmd == "pwd":
+            self.cmd_pwd(args)
+
+        elif cmd == "find":
+            self.cmd_find(args)
+
+        elif cmd == "tail":
+            self.cmd_tail(args)
 
         else:
             self.print_output(f"Error: Unknown command '{cmd}'\n")
@@ -176,7 +185,84 @@ class ShellEmulator:
             self.current_dir = new_path
             self.print_output(f"Changed directory to: {self.current_dir}\n")
 
-    
+    def cmd_pwd(self, args):
+        if len(args) > 0:
+            self.print_output("Usage: pwd\n")
+        else:
+            self.print_output(f"{self.current_dir}\n")
+
+    def cmd_find(self, args):
+        if len(args) != 1:
+            self.print_output("Usage: find <filename>\n")
+            self.show_prompt()
+            return
+
+        target_name = args[0]
+
+        results = []
+
+        def search(node, current_path):
+            if node['type'] == 'dir':
+                for name, child in node['children'].items():
+                    child_path = f"{current_path}/{name}" if current_path != "/" else f"/{name}"
+                    if name == target_name:
+                        results.append(child_path)
+                    search(child, child_path)
+
+        search(self.vfs, "/")
+
+        if results:
+            for path in sorted(results):
+                self.print_output(f"{path}\n")
+        else:
+            self.print_output("(no results)\n")
+
+
+    def cmd_tail(self, args):
+        n = 10  # по умолчанию 10 строк
+        file_path = None
+
+        # Обработка флага -n
+        i = 0
+        while i < len(args):
+            if args[i] == '-n' and i + 1 < len(args):
+                try:
+                    n = int(args[i+1])
+                    i += 2
+                except:
+                    self.print_output("Error: invalid number after -n\n")
+                    self.show_prompt()
+                    return
+            else:
+                file_path = args[i]
+                i += 1
+
+        if not file_path:
+            self.print_output("Usage: tail [-n N] <file>\n")
+            self.show_prompt()
+            return
+
+        # Разрешаем путь
+        abs_path = self.resolve_path(file_path)
+        node = self.get_node_at(abs_path)
+
+        if not node:
+            self.print_output(f"Error: No such file: {file_path}\n")
+        elif node['type'] != 'file':
+            self.print_output(f"Error: Is a directory: {file_path}\n")
+        else:
+            # Читаем настоящий файл с диска
+            real_file_path = os.path.join(self.vfs_path, *abs_path.strip("/").split("/"))
+            try:
+                with open(real_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+                last_lines = lines[-n:] if len(lines) >= n else lines
+                for line in last_lines:
+                    self.print_output(line.rstrip('\n') + '\n')
+            except Exception as e:
+                self.print_output(f"Error reading file: {e}\n")
+
+
     def resolve_path(self, path):
         """
         Преобразует относительный путь в абсолютный, обрабатывая '.', '..', '/'
