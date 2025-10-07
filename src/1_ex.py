@@ -133,6 +133,12 @@ class ShellEmulator:
         elif cmd == "tail":
             self.cmd_tail(args)
 
+        elif cmd == "mkdir":
+            self.cmd_mkdir(args)
+
+        elif cmd == "touch":
+            self.cmd_touch(args)
+
         else:
             self.print_output(f"Error: Unknown command '{cmd}'\n")
 
@@ -261,6 +267,55 @@ class ShellEmulator:
                     self.print_output(line.rstrip('\n') + '\n')
             except Exception as e:
                 self.print_output(f"Error reading file: {e}\n")
+
+    def cmd_touch(self, args):
+        if len(args) != 1:
+            self.print_output("Usage: touch <filename>\n")
+            self.show_prompt()
+            return
+
+        # Преобразуем в абсолютный путь
+        abs_path = self.resolve_path(args[0])
+        parent_path = "/".join(abs_path.strip("/").split("/")[:-1]) or "/"
+        filename = abs_path.split("/")[-1]
+
+        parent_node = self.get_node_at(parent_path)
+
+        if not parent_node:
+            self.print_output(f"Error: Parent directory not found: {parent_path}\n")
+        elif parent_node['type'] != 'dir':
+            self.print_output(f"Error: Not a directory: {parent_path}\n")
+        elif filename in parent_node['children']:
+            self.print_output(f"File already exists: {abs_path}\n")
+        else:
+            parent_node['children'][filename] = {'type': 'file', 'size': 0}
+            self.print_output(f"Empty file created: {abs_path}\n")
+
+
+
+    def cmd_mkdir(self, args):
+        if len(args) != 1:
+            self.print_output("Usage: mkdir <dirname>\n")
+            self.show_prompt()
+            return
+
+        # Преобразуем в абсолютный путь
+        abs_path = self.resolve_path(args[0])
+        parent_path = "/".join(abs_path.strip("/").split("/")[:-1]) or "/"
+        dirname = abs_path.split("/")[-1]
+
+        # Находим родительскую директорию
+        parent_node = self.get_node_at(parent_path)
+
+        if not parent_node:
+            self.print_output(f"Error: Parent directory not found: {parent_path}\n")
+        elif parent_node['type'] != 'dir':
+            self.print_output(f"Error: Not a directory: {parent_path}\n")
+        elif dirname in parent_node['children']:
+            self.print_output(f"Error: Directory already exists: {dirname}\n")
+        else:
+            parent_node['children'][dirname] = {'type': 'dir', 'children': {}}
+            self.print_output(f"Directory created: {abs_path}\n")
 
 
     def resolve_path(self, path):
