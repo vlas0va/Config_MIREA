@@ -1,0 +1,5 @@
+package_name,requests
+repository_url,https://github.com/vlas0va/Config_MIREA
+repo_mode,file
+output_image,graph.png
+ascii_tree_mode,true
