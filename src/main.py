@@ -66,6 +66,7 @@ def extract_dependencies_from_setup_py(content: str) -> list:
         for line in deps_str.strip('[]').split(','):
             line = line.strip().strip('\'"')
             if line and not line.startswith('#'):
+                line = line.split(';', 1)[0].strip()
                 dep_name = re.split(r'[<>=!~]', line, maxsplit=1)[0].strip()
                 if dep_name:
                     deps.append(dep_name)
