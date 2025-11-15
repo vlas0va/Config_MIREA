@@ -1,0 +1,5 @@
+package_name,my_test_pkg
+repository_url,my_test_pkg.tar.gz
+repo_mode,file
+output_image,graph.png
+ascii_tree_mode,true
